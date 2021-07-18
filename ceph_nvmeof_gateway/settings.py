@@ -121,7 +121,7 @@ class Config:
 
     def refresh(self, options, cli_overrides):
         attrs = self._get_defaults()
-        for key, setting in Config.DEFAULTS:
+        for key, setting in Config.DEFAULTS.items():
             if key in options:
                 attrs[key] = setting.normalize(options[key])
         self._attrs = attrs
