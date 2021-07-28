@@ -75,7 +75,7 @@ class GatewayPortals(RESTController):
             self.db.rollback()
             raise cherrypy.HTTPError(422, message='duplicate gateway portal')
 
-        return gateway
+        return gateway_portal
 
     def delete(self, gateway_id, gateway_portal_id):
         gateway_portal = self.db.query(GatewayPortal).filter_by(

@@ -17,8 +17,12 @@ class GatewayPortal(Model):
     __tablename__ = 'gateway_portals'
 
     id = Column(Integer, primary_key=True)
-
     gateway_id = Column(Integer, ForeignKey('gateways.id'))
+    host_id = Column(Integer, nullable=False) # XXXMG
+    transport_type = Column(String, nullable=False)
+    address = Column(String, nullable=False)
+    port = Column(String, nullable=False)
+
     gateway = relationship("Gateway", backref="gateway_portals")
 
 
