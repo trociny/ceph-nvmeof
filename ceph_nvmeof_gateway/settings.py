@@ -114,6 +114,9 @@ class Config:
         "log_to_stderr": BoolSetting("log_to_stderr", True),
         "log_to_stderr_prefix": StrSetting("log_to_stderr_prefix", ""),
         "log_to_file": BoolSetting("log_to_file", False),
+
+        "spdk_nvmf_tgt": StrSetting("spdk_nvmf_tgt", "nvmf_tgt"),
+        "spdk_nvmf_rpc": StrSetting("spdk_nvmf_tgt", "rpc.py"),
     }
 
     def __init__(self):

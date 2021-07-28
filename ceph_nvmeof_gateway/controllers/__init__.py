@@ -460,6 +460,10 @@ class Controller:
     def db(self):
         return cherrypy.request.db
 
+    @property
+    def nvmeof_target(self):
+        return cherrypy.request.nvmeof_target
+
 
 class RESTController(Controller):
 

@@ -5,7 +5,7 @@ import threading
 import time
 from cp_sqlalchemy import SQLAlchemyPlugin, SQLAlchemyTool
 
-from ceph_nvmeof_gateway import controllers, db, models
+from ceph_nvmeof_gateway import controllers, db, models, nvmeof
 
 logger = logging.getLogger(__name__)
 
@@ -13,14 +13,18 @@ logger = logging.getLogger(__name__)
 class Server:
     def __init__(self, settings):
         self.settings = settings
+        self.nvmeof_target = nvmeof.Target(settings)
         self.shutdown_event = threading.Event()
 
     def shut_down(self):
         logger.info("shutting down")
+        self.nvmeof_target.shut_down()
         self.shutdown_event.set()
 
     def serve(self):
         self._configure()
+
+        self.nvmeof_target.start()
 
         models.load()
         mapper, parent_urls = controllers.generate_routes()
@@ -67,6 +71,11 @@ class Server:
         cherrypy.log.access_log.propagate = False
         cherrypy.log.error_log.propagate = False
 
+        def nvmeof_target():
+            cherrypy.request.nvmeof_target = self.nvmeof_target
+        cherrypy.tools.nvmeof_target = cherrypy.Tool('on_start_resource',
+                                                     nvmeof_target)
+
         # Apply the 'global' CherryPy configuration.
         config = {
             'engine.autoreload.on': False,
@@ -81,6 +90,7 @@ class Server:
             'tools.json_in.force': True,
             'tools.db.on': True,
             'tools.request_logging.on': True,
+            'tools.nvmeof_target.on': True,
             'log.access_file': '',
             'log.error_file': '',
             'log.screen': False,

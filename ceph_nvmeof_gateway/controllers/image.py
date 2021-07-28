@@ -42,7 +42,13 @@ class Images(RESTController):
         return image
 
     def delete(self, image_id):
+        for host in self.db.query(Host).all():
+            if image_id in [x.id for x in host.images]:
+                raise cherrypy.HTTPError(
+                    422, message='image is used by host {}'.format(host.id))
+
         image = self.db.query(Image).get_or_404(image_id)
+
         self.db.delete(image)
 
 

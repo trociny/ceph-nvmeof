@@ -1,11 +1,14 @@
 import cherrypy
 import logging
+import socket
 import sqlalchemy.exc
 
 from . import BackendControllerRoute, EndpointDoc, FrontendControllerRoute, RESTController
 from ceph_nvmeof_gateway.models.gateway import Gateway, GatewayPortal
 from ceph_nvmeof_gateway.schemas.gateway import Gateway as GatewaySchema, \
     GatewayPortal as GatewayPortalSchema
+from ceph_nvmeof_gateway.models.host import Host
+from ceph_nvmeof_gateway.models.image import Image
 
 
 logger = logging.getLogger(__name__)
@@ -67,6 +70,10 @@ class GatewayPortals(RESTController):
     def create(self, gateway_id, gateway_portal):
         gateway = self.db.query(Gateway).get_or_404(gateway_id)
 
+        host = self.db.query(Host).filter_by(
+            id=gateway_portal.host_id).first_or_404()
+        image = self.db.query(Image).get_or_404(host.images[0].id)
+
         gateway_portal.gateway = gateway
         self.db.add(gateway_portal)
         try:
@@ -75,6 +82,15 @@ class GatewayPortals(RESTController):
             self.db.rollback()
             raise cherrypy.HTTPError(422, message='duplicate gateway portal')
 
+        if gateway_portal.gateway.name == socket.getfqdn():
+            try:
+                self.nvmeof_target.create_bdev(image.id, image.image_spec)
+                self.nvmeof_target.create_subsystem(
+                    host.nqn, image.id, gateway_portal.transport_type,
+                    gateway_portal.address, gateway_portal.port)
+            except Exception as e:
+                raise cherrypy.HTTPError(422, message="{}".format(e))
+
         return gateway_portal
 
     def delete(self, gateway_id, gateway_portal_id):
@@ -82,6 +98,16 @@ class GatewayPortals(RESTController):
             id=gateway_portal_id, gateway_id=gateway_id).first_or_404()
         self.db.delete(gateway_portal)
 
+        host = self.db.query(Host).filter_by(
+            id=gateway_portal.host_id).first_or_404()
+        image = self.db.query(Image).get_or_404(host.images[0].id)
+
+        if gateway_portal.gateway.name == socket.getfqdn():
+            try:
+                self.nvmeof_target.delete_subsystem(host.nqn)
+                self.nvmeof_target.delete_bdev(image.id)
+            except Exception as e:
+                raise cherrypy.HTTPError(422, message="{}".format(e))
 
 @BackendControllerRoute('/gateways')
 class GatewaysBackend(RESTController):

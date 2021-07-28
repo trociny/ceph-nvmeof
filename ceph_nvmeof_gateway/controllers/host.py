@@ -3,6 +3,7 @@ import logging
 import sqlalchemy.exc
 
 from . import BackendControllerRoute, EndpointDoc, FrontendControllerRoute, RESTController
+from ceph_nvmeof_gateway.models.gateway import GatewayPortal
 from ceph_nvmeof_gateway.models.host import Host
 from ceph_nvmeof_gateway.models.image import Image
 from ceph_nvmeof_gateway.schemas.host import Host as HostSchema
@@ -40,6 +41,12 @@ class Hosts(RESTController):
         return host
 
     def delete(self, host_id):
+        portal = self.db.query(GatewayPortal).filter_by(host_id=host_id).first()
+        if portal:
+            raise cherrypy.HTTPError(
+                422, message='host is used by gateway portal {}'.format(
+                    portal.id))
+
         host = self.db.query(Host).get_or_404(host_id)
         self.db.delete(host)
 
