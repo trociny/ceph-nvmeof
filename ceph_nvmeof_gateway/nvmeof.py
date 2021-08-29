@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 class Target:
     def __init__(self, settings):
         self.settings = settings
+        self.rpc_socket = "/var/tmp/spdk.{}.sock".format(os.getpid())
         self.target = None
         self.images = {}
         self.hosts = {}
@@ -26,7 +27,8 @@ class Target:
         nvmf_tgt = self.settings.config.spdk_nvmf_tgt
         logger.info('spawning %s', nvmf_tgt)
         # TODO: make sure the process is always terminated
-        self.target = subprocess.Popen(nvmf_tgt, start_new_session=True)
+        self.target = subprocess.Popen(
+            [nvmf_tgt, "--rpc-socket", self.rpc_socket], start_new_session=True)
         logger.debug('pid %s', self.target.pid)
 
         time.sleep(3) # XXXMG: find a better way to wait for the target is ready for rpc
@@ -106,7 +108,7 @@ class Target:
 
     def rpc(self, cmd):
         rpc = self.settings.config.spdk_nvmf_rpc
-        cmd = '{} {}'.format(rpc, cmd)
+        cmd = '{} -s {} {}'.format(rpc, self.rpc_socket, cmd)
         logger.debug('%s', cmd)
         return subprocess.check_output(cmd, shell=True).decode('ascii')
 
