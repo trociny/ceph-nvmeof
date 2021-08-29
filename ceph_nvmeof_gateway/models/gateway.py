@@ -12,6 +12,8 @@ class Gateway(Model):
     gateway_group_id = Column(Integer, ForeignKey('gateway_groups.id'))
     gateway_group = relationship("GatewayGroup", backref="gateways")
 
+    port = Column(String, nullable=True)
+
 
 class GatewayPortal(Model):
     __tablename__ = 'gateway_portals'

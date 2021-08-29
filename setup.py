@@ -41,6 +41,7 @@ setup(
         'CherryPy-SQLAlchemy',
         'marshmallow',
         'marshmallow_sqlalchemy',
+        'requests',
         'rados',
         'rbd',
         'routes',
