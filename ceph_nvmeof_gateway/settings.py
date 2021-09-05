@@ -1,5 +1,6 @@
 import configparser
 import logging
+import socket
 
 
 def _convert_str_to_bool(value):
@@ -101,6 +102,8 @@ class Settings:
 
 class Config:
     DEFAULTS = {
+        "name": StrSetting("name", socket.getfqdn()),
+
         "api_host": StrSetting("api_host", "::"),
         "api_port": IntSetting("api_port", 1, 65535, 5000),
 
@@ -117,6 +120,8 @@ class Config:
 
         "spdk_nvmf_tgt": StrSetting("spdk_nvmf_tgt", "nvmf_tgt"),
         "spdk_nvmf_rpc": StrSetting("spdk_nvmf_tgt", "rpc.py"),
+        "spdk_nvmf_tcp_transport_opts": StrSetting(
+            "spdk_nvmf_tcp_transport_opts", ""),
     }
 
     def __init__(self):

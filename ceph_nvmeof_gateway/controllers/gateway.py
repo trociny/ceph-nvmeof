@@ -1,10 +1,8 @@
 import cherrypy
+import json
 import logging
 import requests
-import socket
 import sqlalchemy.exc
-
-import ceph_nvmeof_gateway.settings
 
 from . import BackendControllerRoute, EndpointDoc, FrontendControllerRoute, RESTController
 from ceph_nvmeof_gateway.models.gateway import Gateway, GatewayPortal
@@ -71,6 +69,9 @@ class GatewayPortals(RESTController):
     @EndpointDoc(parameters=gateway_portal_schema,
                  responses={201: gateway_portal_schema})
     def create(self, gateway_id, gateway_portal):
+        logger.debug("create: gateway_id={}, gateway_portal={}".format(
+            gateway_id, gateway_schema.dumps(gateway_portal)))
+
         gateway = self.db.query(Gateway).get_or_404(gateway_id)
 
         host = self.db.query(Host).filter_by(
@@ -79,7 +80,8 @@ class GatewayPortals(RESTController):
 
         gateway_portal.gateway = gateway
 
-        if gateway.name == socket.getfqdn():
+        if gateway.name == self.settings.config.name:
+            logger.debug("creating".format())
             self.db.add(gateway_portal)
             try:
                 self.db.commit()
@@ -96,17 +98,27 @@ class GatewayPortals(RESTController):
         else:
             port = gateway.port
             if not port:
-                settings = ceph_nvmeof_gateway.settings.Settings()
-                port = settings.config.api_port
-            url = "http://{}:{}/backend/gateways/{}/portals".format(
+                port = self.settings.config.api_port
+            url = "http://{}:{}/gateways/{}/portals".format(
                 gateway.name, port, gateway_id)
-            response = requests.post(
-                url, json=gateway_portal_schema.dump(gateway_portal))
-            # TODO: handle error
+            logger.debug("forwarding to {}".format(url))
+            try:
+                gateway_portal_json = gateway_portal_schema.dump(gateway_portal)
+                del gateway_portal_json['id']
+                response = requests.post(url, json=gateway_portal_json)
+                # XXXMG
+                gateway_portal_id = json.loads(response.content)['id']
+                gateway_portal = self.db.query(GatewayPortal).filter_by(
+                    id=gateway_portal_id, gateway_id=gateway_id).first_or_404()
+            except Exception as e:
+                raise cherrypy.HTTPError(422, message="{}".format(e))
 
         return gateway_portal
 
     def delete(self, gateway_id, gateway_portal_id):
+        logger.debug("delete: gateway_id={}, gateway_portal_id={}".format(
+            gateway_id, gateway_portal_id))
+
         gateway_portal = self.db.query(GatewayPortal).filter_by(
             id=gateway_portal_id, gateway_id=gateway_id).first_or_404()
 
@@ -114,7 +126,8 @@ class GatewayPortals(RESTController):
             id=gateway_portal.host_id).first_or_404()
         image = self.db.query(Image).get_or_404(host.images[0].id)
 
-        if gateway_portal.gateway.name == socket.getfqdn():
+        if gateway_portal.gateway.name == self.settings.config.name:
+            logger.debug("deleting".format())
             self.db.delete(gateway_portal)
             try:
                 self.nvmeof_target.delete_subsystem(host.nqn)
@@ -122,14 +135,17 @@ class GatewayPortals(RESTController):
             except Exception as e:
                 raise cherrypy.HTTPError(422, message="{}".format(e))
         else:
-            port = gateway.port
+            port = gateway_portal.gateway.port
             if not port:
-                settings = ceph_nvmeof_gateway.settings.Settings()
-                port = settings.config.api_port
-            url = "http://{}:{}/backend/gateways/{}/portals/{}".format(
-                gateway.name, port, gateway_id, gateway_portal_id)
-            response = requests.delete(url)
-            # TODO: handle error
+                port = self.settings.config.api_port
+            url = "http://{}:{}/gateways/{}/portals/{}".format(
+                gateway_portal.gateway.name, port, gateway_id,
+                gateway_portal_id)
+            logger.debug("forwarding to {}".format(url))
+            try:
+                response = requests.delete(url)
+            except Exception as e:
+                raise cherrypy.HTTPError(422, message="{}".format(e))
 
 @BackendControllerRoute('/gateways')
 class GatewaysBackend(RESTController):

@@ -1,5 +1,4 @@
 import logging
-import os
 import time
 import subprocess
 
@@ -14,13 +13,8 @@ logger = logging.getLogger(__name__)
 class Target:
     def __init__(self, settings):
         self.settings = settings
-        self.rpc_socket = "/var/tmp/spdk.{}.sock".format(os.getpid())
+        self.rpc_socket = "/var/tmp/spdk.{}.sock".format(settings.config.name)
         self.target = None
-        self.images = {}
-        self.hosts = {}
-        self.host_images = {}
-        self.gateways = {}
-        self.portals = {}
         self.namespaces = {}
 
     def start(self):
@@ -32,7 +26,7 @@ class Target:
         logger.debug('pid %s', self.target.pid)
 
         time.sleep(3) # XXXMG: find a better way to wait for the target is ready for rpc
-        opts = "-q 256 -p 18 -u 1048576 -i 1048576 -n 1023"
+        opts = self.settings.config.spdk_nvmf_tcp_transport_opts
         cmd = "nvmf_create_transport -t TCP {}".format(opts)
         logger.debug('creating target tcp transport')
         self.rpc(cmd)
@@ -45,61 +39,65 @@ class Target:
         Session.configure(bind=engine)
         session = Session()
 
+        gateways = {}
+        images = {}
+        hosts = {}
+        host_images = {}
+        portals = {}
+
         for image in session.query(Image):
-            self.images[image.id] = image.image_spec
+            images[image.id] = image.image_spec
 
         for host in session.query(Host):
-            self.hosts[host.id] = host.nqn
+            hosts[host.id] = host.nqn
 
         # XXXMG: seems unnecessary: use host.images from query(Host) above
         for host_id, image_id in session.query(HostImages):
-            if host_id not in self.hosts:
+            if host_id not in hosts:
                 logger.debug('unknown host id %s for image id %s',
                              host_id, image_id)
                 continue
-            if image_id not in self.images:
+            if image_id not in images:
                 logger.debug('unknown image id %s for host id %s',
                              image_id, host_id)
                 continue
-            self.host_images[host_id] = image_id
+            host_images[host_id] = image_id
 
         for gateway in session.query(Gateway):
-            self.gateways[gateway.id] = gateway.name
+            gateways[gateway.id] = gateway.name
 
-        for image_id, image_spec in self.images.items():
-            ns = self.create_bdev(image_id, self.images[image_id])
+        for image_id, image_spec in images.items():
+            ns = self.create_bdev(image_id, images[image_id])
 
         for portal in session.query(GatewayPortal):
-            if portal.gateway_id not in self.gateways:
+            if portal.gateway_id not in gateways:
                 logger.debug('unknown gateway id %s for portal %s',
                              portal.gateway_id, portal.id)
                 continue
-            if portal.host_id not in self.hosts:
+            if gateways[portal.gateway_id] != self.settings.config.name:
+                logger.debug('gateway %s(%s) for portal %s is not me (%s)',
+                             gateways[portal.gateway_id], portal.gateway_id,
+                             portal.id, self.settings.config.name)
+                continue
+            if portal.host_id not in hosts:
                 logger.debug('unknown host id %s for portal %s',
                              portal.host_id, portal.id)
                 continue
-            if portal.host_id not in self.host_images:
+            if portal.host_id not in host_images:
                 logger.debug('no images for host id %s', portal.host_id)
                 continue
-            self.portals[portal.host_id] = portal
+            portals[portal.host_id] = portal
 
-        for id, portal in self.portals.items():
+        for id, portal in portals.items():
             host_id = portal.host_id
-            nqn = self.hosts[host_id]
-            image_id = self.host_images[host_id]
+            nqn = hosts[host_id]
+            image_id = host_images[host_id]
             self.create_subsystem(nqn, image_id, portal.transport_type,
                                   portal.address, portal.port)
 
     def shut_down(self):
         if not self.target:
             return
-
-        for id, portal in self.portals.items():
-            host_id = portal.host_id
-            nqn = self.hosts[host_id]
-            image_id = self.host_images[host_id]
-            self.delete_subsystem(nqn)
-            self.delete_bdev(image_id)
 
         logger.info('terminating process %s', self.target.pid)
         self.target.kill()

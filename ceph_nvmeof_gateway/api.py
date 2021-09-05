@@ -76,6 +76,10 @@ class Server:
         cherrypy.tools.nvmeof_target = cherrypy.Tool('on_start_resource',
                                                      nvmeof_target)
 
+        def settings():
+            cherrypy.request.settings = self.settings
+        cherrypy.tools.settings = cherrypy.Tool('on_start_resource', settings)
+
         # Apply the 'global' CherryPy configuration.
         config = {
             'engine.autoreload.on': False,
@@ -91,6 +95,7 @@ class Server:
             'tools.db.on': True,
             'tools.request_logging.on': True,
             'tools.nvmeof_target.on': True,
+            'tools.settings.on': True,
             'log.access_file': '',
             'log.error_file': '',
             'log.screen': False,
