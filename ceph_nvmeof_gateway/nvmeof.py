@@ -1,6 +1,8 @@
+import ctypes
 import logging
-import time
+import signal
 import subprocess
+import time
 
 from sqlalchemy.orm import sessionmaker
 from . import db
@@ -8,7 +10,16 @@ from ceph_nvmeof_gateway.models.gateway import Gateway, GatewayPortal
 from ceph_nvmeof_gateway.models.image import Image
 from ceph_nvmeof_gateway.models.host import Host, HostImages
 
+
 logger = logging.getLogger(__name__)
+
+
+libc = ctypes.CDLL("libc.so.6")
+def set_pdeathsig(sig = signal.SIGTERM):
+    def callable():
+        return libc.prctl(1, sig)
+    return callable
+
 
 class Target:
     def __init__(self, settings):
@@ -22,7 +33,8 @@ class Target:
         logger.info('spawning %s', nvmf_tgt)
         # TODO: make sure the process is always terminated
         self.target = subprocess.Popen(
-            [nvmf_tgt, "--rpc-socket", self.rpc_socket], start_new_session=True)
+            [nvmf_tgt, "--rpc-socket", self.rpc_socket],
+            preexec_fn = set_pdeathsig(signal.SIGTERM))
         logger.debug('pid %s', self.target.pid)
 
         time.sleep(3) # XXXMG: find a better way to wait for the target is ready for rpc
@@ -99,9 +111,16 @@ class Target:
         if not self.target:
             return
 
+        if self.target.poll() is None:
+            logger.debug('traget process %s is already exited with %s',
+                         self.target.pid, self.target.returncode)
+            return
+
         logger.info('terminating process %s', self.target.pid)
         self.target.kill()
         self.target.wait()
+        logger.debug('traget process %s exited with %s', self.target.pid,
+                     self.target.returncode)
         self.target = None
 
     def rpc(self, cmd):
