@@ -23,13 +23,13 @@ class GatewayPortal(Model):
 
     id = Column(Integer, primary_key=True)
     gateway_id = Column(Integer, ForeignKey('gateways.id'))
-    host_id = Column(Integer, nullable=False) # XXXMG
+    host_id = Column(Integer, ForeignKey('hosts.id'))
     transport_type = Column(String, nullable=False)
     address = Column(String, nullable=False)
     port = Column(String, nullable=False)
 
     gateway = relationship("Gateway", backref="gateway_portals")
-
+    host = relationship("Host", backref="gateway_portals")
 
 class GatewayGroup(Model):
     __tablename__ = 'gateway_groups'

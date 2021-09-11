@@ -6,6 +6,7 @@ from ceph_nvmeof_gateway.models import gateway
 class GatewayPortal(SQLAlchemyAutoSchema):
     class Meta:
         model = gateway.GatewayPortal
+        include_fk = True
         load_instance = True
 
     id = auto_field(dump_only=True)

@@ -79,6 +79,7 @@ class GatewayPortals(RESTController):
         image = self.db.query(Image).get_or_404(host.images[0].id)
 
         gateway_portal.gateway = gateway
+        gateway_portal.host = host
 
         if gateway.name == self.settings.config.name:
             logger.debug("creating".format())
