@@ -1,4 +1,4 @@
-from sqlalchemy import Column, ForeignKey, Integer, String
+from sqlalchemy import Column, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import relationship
 from ceph_nvmeof_gateway.models import Model
 
@@ -17,6 +17,9 @@ class Gateway(Model):
 
 class GatewayPortal(Model):
     __tablename__ = 'gateway_portals'
+    __table_args__ = (
+        UniqueConstraint('transport_type', 'address', 'port', name='port'),
+    )
 
     id = Column(Integer, primary_key=True)
     gateway_id = Column(Integer, ForeignKey('gateways.id'))
