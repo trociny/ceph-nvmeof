@@ -47,6 +47,13 @@ class Gateways(RESTController):
         return gateway
 
     def delete(self, gateway_id):
+        portal = self.db.query(GatewayPortal).filter_by(
+            gateway_id=gateway_id).first()
+        if portal:
+            raise cherrypy.HTTPError(
+                422, message='gateway is used by gateway portal {}'.format(
+                    portal.id))
+
         gateway = self.db.query(Gateway).get_or_404(gateway_id)
         self.db.delete(gateway)
 
@@ -74,6 +81,24 @@ class GatewayPortals(RESTController):
 
         gateway = self.db.query(Gateway).get_or_404(gateway_id)
 
+        if gateway.name != self.settings.config.name:
+            port = gateway.port
+            if not port:
+                port = self.settings.config.api_port
+            url = "http://{}:{}/gateways/{}/portals".format(
+                gateway.name, port, gateway_id)
+
+            logger.debug("forwarding to {}".format(url))
+
+            gateway_portal_json = gateway_portal_schema.dump(gateway_portal)
+            del gateway_portal_json['id']
+            response = requests.post(url, json=gateway_portal_json)
+            gateway_portal_id = json.loads(response.content)['id']
+            gateway_portal = self.db.query(GatewayPortal).filter_by(
+                id=gateway_portal_id, gateway_id=gateway_id).first_or_404()
+
+            return gateway_portal
+
         host = self.db.query(Host).filter_by(
             id=gateway_portal.host_id).first_or_404()
         image = self.db.query(Image).get_or_404(host.images[0].id)
@@ -81,38 +106,31 @@ class GatewayPortals(RESTController):
         gateway_portal.gateway = gateway
         gateway_portal.host = host
 
-        if gateway.name == self.settings.config.name:
-            logger.debug("creating".format())
-            self.db.add(gateway_portal)
-            try:
-                self.db.commit()
-            except sqlalchemy.exc.IntegrityError:
-                self.db.rollback()
-                raise cherrypy.HTTPError(422, message='duplicate gateway portal')
-            try:
-                self.nvmeof_target.create_bdev(image.id, image.image_spec)
-                self.nvmeof_target.create_subsystem(
-                    host.nqn, image.id, gateway_portal.transport_type,
+        logger.debug("creating")
+
+        self.db.add(gateway_portal)
+        try:
+            self.db.commit()
+        except sqlalchemy.exc.IntegrityError:
+            self.db.rollback()
+            raise cherrypy.HTTPError(422, message='duplicate gateway portal')
+
+        try:
+            self.nvmeof_target.create_bdev(image.id, image.image_spec)
+        except Exception as e:
+            self.db.delete(gateway_portal)
+            raise cherrypy.HTTPError(422, message="{}".format(e))
+        try:
+            self.nvmeof_target.create_subsystem(
+                host.nqn, image.id, gateway_portal.transport_type,
                     gateway_portal.address, gateway_portal.port)
-            except Exception as e:
-                raise cherrypy.HTTPError(422, message="{}".format(e))
-        else:
-            port = gateway.port
-            if not port:
-                port = self.settings.config.api_port
-            url = "http://{}:{}/gateways/{}/portals".format(
-                gateway.name, port, gateway_id)
-            logger.debug("forwarding to {}".format(url))
+        except Exception as e:
             try:
-                gateway_portal_json = gateway_portal_schema.dump(gateway_portal)
-                del gateway_portal_json['id']
-                response = requests.post(url, json=gateway_portal_json)
-                # XXXMG
-                gateway_portal_id = json.loads(response.content)['id']
-                gateway_portal = self.db.query(GatewayPortal).filter_by(
-                    id=gateway_portal_id, gateway_id=gateway_id).first_or_404()
+                self.nvmeof_target.delete_bdev(image.id)
             except Exception as e:
-                raise cherrypy.HTTPError(422, message="{}".format(e))
+                logger.debug("{}".format(e))
+            self.db.delete(gateway_portal)
+            raise cherrypy.HTTPError(422, message="{}".format(e))
 
         return gateway_portal
 
@@ -123,30 +141,38 @@ class GatewayPortals(RESTController):
         gateway_portal = self.db.query(GatewayPortal).filter_by(
             id=gateway_portal_id, gateway_id=gateway_id).first_or_404()
 
-        host = self.db.query(Host).filter_by(
-            id=gateway_portal.host_id).first_or_404()
-        image = self.db.query(Image).get_or_404(host.images[0].id)
-
-        if gateway_portal.gateway.name == self.settings.config.name:
-            logger.debug("deleting".format())
-            self.db.delete(gateway_portal)
-            try:
-                self.nvmeof_target.delete_subsystem(host.nqn)
-                self.nvmeof_target.delete_bdev(image.id)
-            except Exception as e:
-                raise cherrypy.HTTPError(422, message="{}".format(e))
-        else:
+        if gateway_portal.gateway.name != self.settings.config.name:
             port = gateway_portal.gateway.port
             if not port:
                 port = self.settings.config.api_port
             url = "http://{}:{}/gateways/{}/portals/{}".format(
                 gateway_portal.gateway.name, port, gateway_id,
                 gateway_portal_id)
+
             logger.debug("forwarding to {}".format(url))
             try:
                 response = requests.delete(url)
-            except Exception as e:
-                raise cherrypy.HTTPError(422, message="{}".format(e))
+            except urllib3.exceptions.MaxRetryError as e:
+                logger.error("forwarding delete to {} failed: {}".fortmat(
+                    url, e))
+                logger.debug("deleting from db anyway")
+                self.db.delete(gateway_portal)
+                return
+            logger.debug("response: {}".format(response))
+            return
+
+        host = self.db.query(Host).filter_by(
+            id=gateway_portal.host_id).first_or_404()
+        image = self.db.query(Image).get_or_404(host.images[0].id)
+
+        logger.debug("deleting")
+
+        self.db.delete(gateway_portal)
+        try:
+            self.nvmeof_target.delete_subsystem(host.nqn)
+            self.nvmeof_target.delete_bdev(image.id)
+        except Exception as e:
+            raise cherrypy.HTTPError(422, message="{}".format(e))
 
 @BackendControllerRoute('/gateways')
 class GatewaysBackend(RESTController):
