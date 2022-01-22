@@ -10,9 +10,8 @@
 import argparse
 import grpc
 import json
-import nvme_gw_pb2_grpc as pb2_grpc
-import nvme_gw_pb2 as pb2
-import nvme_gw_config
+from nvme_gw import pb2_grpc, pb2
+import nvme_gw.config
 
 
 def argument(*name_or_flags, **kwargs):
@@ -276,7 +275,7 @@ class GatewayClient:
 def main():
     client = GatewayClient()
     args = client.cli.parser.parse_args()
-    nvme_config = nvme_gw_config.NVMeGWConfig(args.config)
+    nvme_config = nvme_gw.config.NVMeGWConfig(args.config)
     client.connect(nvme_config)
     if args.subcommand is None:
         client.cli.parser.print_help()

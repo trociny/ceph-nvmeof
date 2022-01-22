@@ -16,9 +16,8 @@ import signal
 import subprocess
 import grpc
 from concurrent import futures
-import nvme_gw_pb2_grpc as pb2_grpc
-import nvme_gw_pb2 as pb2
-import nvme_gw_config
+from nvme_gw import pb2_grpc, pb2
+import nvme_gw.config
 import argparse
 import json
 
@@ -298,7 +297,7 @@ class GWService(pb2_grpc.NVMEGatewayServicer):
 
 def serve(gw_config_filename):
 
-    nvme_config = nvme_gw_config.NVMeGWConfig(gw_config_filename)
+    nvme_config = nvme_gw.config.NVMeGWConfig(gw_config_filename)
 
     enable_auth = nvme_config.getboolean("config", "enable_auth")
     gateway_addr = nvme_config.get("config", "gateway_addr")

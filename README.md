@@ -22,7 +22,7 @@ This daemon runs as root. It provides the ability to export existing RBD images 
 
 4. Compile protobuf files for gRPC:
 		
-	    $ python3 -m grpc_tools.protoc --proto_path=./proto ./proto/nvme_gw.proto --python_out=. --grpc_python_out=.   
+		$ ./make_proto.sh
 
 5. SPDK v21.04 is included in this repository. Edit the config file to set:
 
