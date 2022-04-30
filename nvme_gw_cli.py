@@ -321,7 +321,6 @@ class GatewayClient:
 
     @cli.cmd([
         argument("-n", "--subnqn", help="Subsystem NQN", required=True),
-        argument("-a", "--traddr", help="NVMe host IP", required=True),
         argument("-s", "--trsvcid", help="Port number", required=True),
         argument("-t", "--trtype", help="Transport type", default="TCP"),
         argument("-f", "--adrfam", help="Address family", default="ipv4"),
@@ -334,7 +333,6 @@ class GatewayClient:
                 nqn=args.subnqn,
                 trtype=args.trtype,
                 adrfam=args.adrfam,
-                traddr=args.traddr,
                 trsvcid=args.trsvcid,
             )
             ret = self.stub.nvmf_subsystem_add_listener(create_req)
@@ -344,7 +342,6 @@ class GatewayClient:
 
     @cli.cmd([
         argument("-n", "--subnqn", help="Subsystem NQN", required=True),
-        argument("-a", "--traddr", help="NVMe host IP", required=True),
         argument("-s", "--trsvcid", help="Port number", required=True),
         argument("-t", "--trtype", help="Transport type", default="TCP"),
         argument("-f", "--adrfam", help="Address family", default="ipv4"),
@@ -357,11 +354,10 @@ class GatewayClient:
                 nqn=args.subnqn,
                 trtype=args.trtype,
                 adrfam=args.adrfam,
-                traddr=args.traddr,
                 trsvcid=args.trsvcid,
             )
             ret = self.stub.nvmf_subsystem_remove_listener(delete_req)
-            self.logger.info(f"Deleted {args.traddr} from {args.subnqn}: {ret.status}")
+            self.logger.info(f"Deleted {args.trsvcid} from {args.subnqn}: {ret.status}")
         except Exception as error:
             self.logger.error(f"Failed to create listener: \n {error}")
 

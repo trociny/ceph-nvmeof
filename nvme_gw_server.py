@@ -13,6 +13,7 @@ import os
 import shlex
 import sys
 import signal
+import socket
 import subprocess
 import grpc
 from concurrent import futures
@@ -21,6 +22,7 @@ import nvme_gw_pb2 as pb2
 import nvme_gw_config
 from nvme_gw_persistence import OmapPersistentConfig
 import argparse
+import ipaddress
 import json
 
 libc = ctypes.CDLL(ctypes.util.find_library("c"))
@@ -52,6 +54,21 @@ class GWService(pb2_grpc.NVMEGatewayServicer):
         self.persistent_config = OmapPersistentConfig(nvme_config)
         self.spdk_process = None
         self.server = None
+
+        self.traddr = None
+        gateway_addr = self.nvme_config.get("config", "gateway_addr")
+        try:
+            ipaddr = ipaddress.ip_address(gateway_addr.strip('[]'))
+            if not ipaddr.is_unspecified:
+                traddr = str(ipaddr)
+        except Exception as ex:
+            pass
+        if not self.traddr:
+            hostname = socket.gethostname()
+            self.traddr = socket.gethostbyname(hostname)
+
+        if not self.traddr:
+            self.terminate("Failed to get gateway address")
 
     def __enter__(self):
         return self
@@ -520,7 +537,7 @@ class GWService(pb2_grpc.NVMEGatewayServicer):
     def nvmf_subsystem_add_listener(self, request, context=None):
         """Adds a listener at the given TCP/IP address for the given subsystem."""
         self.logger.info({
-            f"Adding listener at {request.traddr} : {request.trsvcid} for {request.nqn}"
+            f"Adding listener at {self.traddr} : {request.trsvcid} for {request.nqn}"
         })
 
         # Create transport if needed
@@ -533,7 +550,7 @@ class GWService(pb2_grpc.NVMEGatewayServicer):
                 self.spdk_rpc_client,
                 request.nqn,
                 request.trtype,
-                request.traddr,
+                self.traddr,
                 request.trsvcid,
                 request.adrfam,
             )
@@ -548,26 +565,26 @@ class GWService(pb2_grpc.NVMEGatewayServicer):
         if context:
             # Update persistent configuration
             try:
-                self.persistent_config.add_listener(request.nqn, request.traddr,
+                self.persistent_config.add_listener(request.nqn,
                                                     request.trsvcid,
                                                     str(request))
             except Exception as ex:
                 self.terminate(
-                    f"Error persisting listener {request.traddr}: {ex}")
+                    f"Error persisting listener {request.trsvcid}: {ex}")
 
         return pb2.req_status(status=return_string)
 
     def nvmf_subsystem_remove_listener(self, request, context=None):
         """Removes a listener at the given TCP/IP address for the given subsystem."""
         self.logger.info(
-            {f"Removing listener at {request.traddr} for {request.nqn}."})
+            {f"Removing listener at {self.traddr} : {request.trsvcid} for {request.nqn}."})
 
         try:
             return_string = self.spdk_rpc.nvmf.nvmf_subsystem_remove_listener(
                 self.spdk_rpc_client,
                 request.nqn,
                 request.trtype,
-                request.traddr,
+                self.traddr,
                 request.trsvcid,
                 request.adrfam,
             )
@@ -583,11 +600,10 @@ class GWService(pb2_grpc.NVMEGatewayServicer):
             # Update persistent configuration
             try:
                 self.persistent_config.delete_listener(request.nqn,
-                                                       request.traddr,
                                                        request.trsvcid)
             except Exception as ex:
                 self.terminate(
-                    f"Error persisting listener {request.traddr} delete: {ex}")
+                    f"Error persisting listener {request.trsvcid} delete: {ex}")
 
         return pb2.req_status(status=return_string)
 

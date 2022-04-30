@@ -270,17 +270,14 @@ class OmapPersistentConfig(PersistentConfig):
                     )
                 callback(req)
 
-    def add_listener(self, subsystem_nqn: str, traddr: str, trsvcid: str,
-                     val: str):
+    def add_listener(self, subsystem_nqn: str, trsvcid: str, val: str):
         """Adds a listener to the persistent config."""
-        key = "{}{}_{}_{}".format(self.LISTENER_PREFIX, subsystem_nqn, traddr,
-                                  trsvcid)
+        key = "{}{}_{}".format(self.LISTENER_PREFIX, subsystem_nqn, trsvcid)
         self._write_key(key, val)
 
-    def delete_listener(self, subsystem_nqn: str, traddr: str, trsvcid: str):
+    def delete_listener(self, subsystem_nqn: str, trsvcid: str):
         """Deletes a listener from the persistent config."""
-        key = "{}{}_{}_{}".format(self.LISTENER_PREFIX, subsystem_nqn, traddr,
-                                  trsvcid)
+        key = "{}{}_{}".format(self.LISTENER_PREFIX, subsystem_nqn, trsvcid)
         self._delete_key(key)
 
     def _restore_listeners(self, omap_dict, callback):
@@ -293,7 +290,6 @@ class OmapPersistentConfig(PersistentConfig):
                     nqn=args["nqn"],
                     trtype=args["trtype"],
                     adrfam=args["adrfam"],
-                    traddr=args["traddr"],
                     trsvcid=args["trsvcid"],
                 )
                 callback(req)
