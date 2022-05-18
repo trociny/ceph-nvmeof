@@ -308,17 +308,6 @@ class GatewayClient:
         except Exception as error:
             self.logger.error(f"Failed to add host: \n {error}")
 
-    @cli.cmd([argument("-t", "--trtype", help="Transport type", default="TCP")])
-    def create_transport(self, args):
-        """Sets a transport type."""
-
-        try:
-            create_req = pb2.create_transport_req(trtype=args.trtype)
-            ret = self.stub.nvmf_create_transport(create_req)
-            self.logger.info(f"Created {args.trtype} transport: {ret.status}")
-        except Exception as error:
-            self.logger.error(f"Failed to create transport: \n {error}")
-
     @cli.cmd([
         argument("-n", "--subnqn", help="Subsystem NQN", required=True),
         argument("-s", "--trsvcid", help="Port number", required=True),

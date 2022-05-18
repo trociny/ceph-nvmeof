@@ -206,6 +206,31 @@ class GWService(pb2_grpc.NVMEGatewayServicer):
         except Exception as ex:
             self.logger.error(f"Unable to initialize SPDK: \n {ex}")
             raise
+
+        spdk_transports = self.nvme_config.get("spdk", "transports", "tcp")
+
+        for trtype in spdk_transports.split():
+            args = {'trtype' : trtype}
+            name = "transport_" + trtype + "_options"
+            options = self.nvme_config.get("spdk", name, "")
+            for opt in options.split():
+                try:
+                    k, v =opt.split('=')
+                    args[k] = v
+                except ValueError as ex:
+                    self.logger.error(
+                        f"Failed to parse spkd {name} ({options}): \n {ex}"
+                    )
+                    raise
+            try:
+                status = self.spdk_rpc.nvmf.nvmf_create_transport(
+                    self.spdk_rpc_client, **args)
+            except Exception as ex:
+                self.logger.error(
+                    f"Create Transport {trtype} returned with error: \n {ex}"
+                )
+                raise
+
         return
 
     def restore_config(self):
@@ -217,8 +242,6 @@ class GWService(pb2_grpc.NVMEGatewayServicer):
                   NAMESPACE_PREFIX] = self.nvmf_subsystem_add_ns
         callbacks[
             self.persistent_config.HOST_PREFIX] = self.nvmf_subsystem_add_host
-        callbacks[self.persistent_config.
-                  TRANSPORT_PREFIX] = self.nvmf_create_transport
         callbacks[self.persistent_config.
                   LISTENER_PREFIX] = self.nvmf_subsystem_add_listener
         self.persistent_config.restore(callbacks)
@@ -497,42 +520,6 @@ class GWService(pb2_grpc.NVMEGatewayServicer):
                 self.terminate(f"Error persisting remove host: {ex}")
 
         return pb2.req_status(status=return_string)
-
-    def nvmf_create_transport(self, request, context=None):
-        """Sets a transport type for device access."""
-        self.logger.info({f"Setting transport type to: {request.trtype}"})
-        persist_val = "trtype: " + '"' + request.trtype + '"'
-
-        # Check if transport type has already been created
-        if context:
-            trtype = self.persistent_config.get_transport(request.trtype)
-            if trtype is not None:
-                self.logger.info(
-                    f"Create Transport {trtype} already created.\n")
-                return pb2.req_status()
-
-        try:
-            status = self.spdk_rpc.nvmf.nvmf_create_transport(
-                self.spdk_rpc_client, request.trtype)
-        except Exception as ex:
-            self.logger.error(
-                f"Create Transport {request.trtype} returned with error: \n {ex}"
-            )
-            if context:
-                context.set_code(grpc.StatusCode.INTERNAL)
-                context.set_details(f"{ex}")
-            return pb2.req_status()
-
-        if context:
-            # Update persistent configuration
-            try:
-                self.persistent_config.set_transport(request.trtype,
-                                                     persist_val)
-            except Exception as ex:
-                self.terminate(
-                    f"Error persisting transport {request.trtype}: {ex}")
-
-        return pb2.req_status(status=status)
 
     def nvmf_subsystem_add_listener(self, request, context=None):
         """Adds a listener at the given TCP/IP address for the given subsystem."""
