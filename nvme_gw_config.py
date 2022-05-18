@@ -22,14 +22,26 @@ class NVMeGWConfig:
         self.nvme_gw_config = configparser.ConfigParser()
         self.nvme_gw_config.read(gw_config_filename)
 
-    def get(self, section, param):
-        return self.nvme_gw_config.get(section, param)
+    def get(self, section, param, value=None):
+        if value is None:
+            return self.nvme_gw_config.get(section, param)
+        else:
+            return self.nvme_gw_config.get(section, param, fallback=value)
 
-    def getboolean(self, section, param):
-        return self.nvme_gw_config.getboolean(section, param)
+    def getboolean(self, section, param, value=None):
+        if value is None:
+            return self.nvme_gw_config.getboolean(section, param)
+        else:
+            return self.nvme_gw_config.getboolean(section, param, fallback=value)
 
-    def getint(self, section, param):
-        return self.nvme_gw_config.getint(section, param)
+    def getint(self, section, param, value=None):
+        if value is None:
+            return self.nvme_gw_config.getint(section, param)
+        else:
+            return self.nvme_gw_config.getint(section, param, fallback=value)
 
-    def getfloat(self, section, param):
-        return self.nvme_gw_config.getfloat(section, param)
+    def getfloat(self, section, param, value=None):
+        if value is None:
+            return self.nvme_gw_config.getfloat(section, param)
+        else:
+            return self.nvme_gw_config.getfloat(section, param, fallback=value)
